@@ -65,3 +65,5 @@ You can use this, change it, and build on it. If you distribute a version, you k
 The modules are `engine`, `bridge`, and `app`. Java 21 and an Android SDK are required. `local.properties` is not part of this repository. Point `sdk.dir` at the SDK on the machine that builds it.
 
 `scripts/start-bridge.ps1` loads the translator from a computer. The app can start the same process from the phone once wireless debugging is paired.
+
+GitHub Actions runs the engine tests and builds a debug-signed APK on every push to `main`. A tag such as `v1.2.0-pre.1` publishes that APK as a pre-release. The debug signature lets the package install directly. It is not a store build.

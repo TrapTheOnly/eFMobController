@@ -1,0 +1,98 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install the Android packages this build needs
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.1" "ndk;27.0.12077973"
+
+      - name: Test the gesture engine and build the APK
+        run: chmod +x ./gradlew && ./gradlew :engine:test :app:assembleDebug --stacktrace
+
+      - name: Check the APK contains a signed translator
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          sdk="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          tools="${sdk}/build-tools/35.0.1"
+          expected=$(sed -n 's/.*versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          "$tools/aapt2" dump badging "$apk" | tee badging.txt
+          grep -q "package: name='com.padlayer'" badging.txt
+          grep -q "versionName='${expected}'" badging.txt
+          unzip -l "$apk" | tee listing.txt
+          grep -q "assets/padlayer-bridge.jar" listing.txt
+          grep -q "assets/libpadlayer.so" listing.txt
+          unzip -p "$apk" assets/padlayer-bridge.jar > bridge.jar
+          unzip -l bridge.jar | grep -q "classes.dex"
+          unzip -p "$apk" assets/libpadlayer.so > libpadlayer.so
+          file libpadlayer.so | grep -q "ARM aarch64"
+          "$tools/apksigner" verify "$apk"
+
+      - name: Name the release file
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            cp app/build/outputs/apk/debug/app-debug.apk "dist/eFMobController-${GITHUB_REF_NAME}.apk"
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk dist/eFMobController-debug.apk
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: dist/*.apk
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: dist
+
+      - name: Publish the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ contains(github.ref_name, '-pre') || contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
+          files: dist/*.apk
+          body: |
+            Installable build of the Xbox Wireless Controller translator for Android.
+
+            This package is debug-signed so it can be sideloaded. It is not a Play Store build.
+
+            Turn on Wireless debugging, enter the pairing code and pairing port in the app, tap Pair, then tap Start. A computer does not have to stay connected. The translator keeps running until Stop or a reboot.
+
+            Only the Xbox Wireless Controller is mapped. The source for this tag is the matching commit. License: GPL-3.0-only.
