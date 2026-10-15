@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" role="img" aria-label="eFMobController">
+  <defs>
+    <linearGradient id="pitch" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14301f"/>
+      <stop offset="1" stop-color="#0c1c12"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="320" fill="url(#pitch)"/>
+  <g fill="none" stroke="#d7e7c8" stroke-width="3" opacity="0.85">
+    <rect x="48" y="36" width="1104" height="248" rx="8"/>
+    <line x1="600" y1="36" x2="600" y2="284"/>
+    <circle cx="600" cy="160" r="70"/>
+    <rect x="48" y="96" width="120" height="128"/>
+    <rect x="1032" y="96" width="120" height="128"/>
+  </g>
+  <g transform="translate(860,78)">
+    <rect x="0" y="28" width="250" height="130" rx="28" fill="#1b3a28" stroke="#e7f2dc" stroke-width="3"/>
+    <circle cx="58" cy="92" r="26" fill="none" stroke="#e7f2dc" stroke-width="3"/>
+    <circle cx="168" cy="70" r="16" fill="#e7f2dc"/>
+    <circle cx="210" cy="70" r="16" fill="none" stroke="#e7f2dc" stroke-width="3"/>
+    <circle cx="168" cy="112" r="16" fill="none" stroke="#e7f2dc" stroke-width="3"/>
+    <circle cx="210" cy="112" r="16" fill="none" stroke="#e7f2dc" stroke-width="3"/>
+  </g>
+  <text x="72" y="150" fill="#f4f7ef" font-family="Georgia, serif" font-size="64">eFMobController</text>
+  <text x="74" y="196" fill="#c5d7b4" font-family="Georgia, serif" font-size="22">Xbox Wireless Controller gestures for mobile matches</text>
+  <text x="74" y="270" fill="#8ea584" font-family="Georgia, serif" font-size="16">Copyright (c) 2026 eFMobController contributors</text>
+</svg>
