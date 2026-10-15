@@ -346,9 +346,10 @@ public final class BridgeMain {
 
     private static native int nativeOpenVirtual();
 
-    private static native int nativePush(float lx, float ly, float rx, float ry, float lt, float rt,
+    static native int nativePush(float lx, float ly, float rx, float ry, float lt, float rt,
             int hatX, int hatY, int buttons);
 
+    private final UinputSink sink = new UinputSink();
     private boolean pushLogged;
 
     private void silencePhysical() {
@@ -367,16 +368,7 @@ public final class BridgeMain {
         if (out.action != null) {
             log(out.action);
         }
-        int buttons = 0;
-        if (out.a) buttons |= 1;
-        if (out.b) buttons |= 2;
-        if (out.x) buttons |= 4;
-        if (out.y) buttons |= 8;
-        if (out.lb) buttons |= 16;
-        if (out.rb) buttons |= 32;
-        if (out.start) buttons |= 64;
-        if (out.l3) buttons |= 128;
-        int rc = nativePush(out.lx, out.ly, out.rx, out.ry, out.lt, out.rt, 0, out.hatY, buttons);
+        int rc = sink.publish(out);
         if (rc != 0 && !pushLogged) {
             pushLogged = true;
             log("push failed: " + rc);
