@@ -95,6 +95,8 @@ public final class BridgeMain {
                 Thread reader = new Thread(() -> readLoop(in), "pad-read");
                 reader.setDaemon(true);
                 reader.start();
+                long next = System.nanoTime();
+                long frameNs = 1_000_000_000L / 120L;
                 while (reader.isAlive()) {
                     Output out;
                     synchronized (lock) {
@@ -102,7 +104,13 @@ public final class BridgeMain {
                         out = converter.step(copy());
                     }
                     publish(out);
-                    Thread.sleep(16);
+                    next += frameNs;
+                    long delay = next - System.nanoTime();
+                    if (delay <= 0) {
+                        next = System.nanoTime();
+                        continue;
+                    }
+                    Thread.sleep(delay / 1_000_000L, (int) (delay % 1_000_000L));
                 }
             }
         } finally {

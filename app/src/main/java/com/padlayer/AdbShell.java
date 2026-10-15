@@ -5,12 +5,17 @@ import android.content.Context;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import io.github.muntashirakon.adb.AdbPairingRequiredException;
 import io.github.muntashirakon.adb.AdbStream;
@@ -31,9 +36,24 @@ final class AdbShell {
 
     static void pair(Context context, int port, String code) throws Exception {
         PadAdb adb = PadAdb.get(context);
-        if (!adb.pair("127.0.0.1", port, code)) {
-            throw new IllegalStateException("Pairing did not complete.");
+        Exception last = null;
+        List<String> hosts = candidateHosts(context, AdbMdns.SERVICE_TYPE_TLS_PAIRING);
+        hosts.remove("127.0.0.1");
+        hosts.add("127.0.0.1");
+        for (String host : hosts) {
+            try {
+                adb.setHostAddress(host);
+                if (adb.pair(host, port, code)) {
+                    return;
+                }
+            } catch (Exception e) {
+                last = e;
+            }
         }
+        if (last != null) {
+            throw last;
+        }
+        throw new IllegalStateException("Pairing did not complete. Use the port on the pairing screen, not the connection port.");
     }
 
     static int findPairingPort(Context context) throws Exception {
@@ -45,14 +65,17 @@ final class AdbShell {
         if (adb.isConnected()) {
             return;
         }
-        adb.setHostAddress("127.0.0.1");
         if (portText != null && !portText.isEmpty()) {
-            try {
-                if (adb.connect("127.0.0.1", parsePort(portText)) || adb.isConnected()) {
-                    return;
+            int port = parsePort(portText);
+            for (String host : candidateHosts(context, AdbMdns.SERVICE_TYPE_TLS_CONNECT)) {
+                try {
+                    adb.setHostAddress(host);
+                    if (adb.connect(host, port) || adb.isConnected()) {
+                        return;
+                    }
+                } catch (Exception ignored) {
+                    // The typed port can be stale after Wireless debugging restarts.
                 }
-            } catch (Exception ignored) {
-                // The typed port can be stale after Wireless debugging restarts.
             }
         }
         try {
@@ -65,8 +88,17 @@ final class AdbShell {
             // Discovery can fail on this phone. The system property is the next try.
         }
         int propertyPort = propertyPort("service.adb.tls.port");
-        if (propertyPort > 0 && (adb.connect("127.0.0.1", propertyPort) || adb.isConnected())) {
-            return;
+        if (propertyPort > 0) {
+            for (String host : candidateHosts(context, AdbMdns.SERVICE_TYPE_TLS_CONNECT)) {
+                try {
+                    adb.setHostAddress(host);
+                    if (adb.connect(host, propertyPort) || adb.isConnected()) {
+                        return;
+                    }
+                } catch (Exception ignored) {
+                    // Try the next address. Localhost and Wi-Fi are not the same listener.
+                }
+            }
         }
         throw new IllegalStateException(
                 "Turn Wireless debugging on. If it is already on, type the port shown next to the IP address.");
@@ -128,6 +160,56 @@ final class AdbShell {
         header.put(id.getBytes(StandardCharsets.US_ASCII));
         header.putInt(value);
         stream.write(header.array(), 0, 8);
+    }
+
+    private static List<String> candidateHosts(Context context, String serviceType) {
+        List<String> hosts = new ArrayList<>();
+        hosts.add("127.0.0.1");
+        String discovered = discoverHost(context, serviceType);
+        if (discovered != null && !hosts.contains(discovered)) {
+            hosts.add(discovered);
+        }
+        try {
+            for (NetworkInterface iface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!iface.isUp() || iface.isLoopback()) {
+                    continue;
+                }
+                for (InetAddress address : Collections.list(iface.getInetAddresses())) {
+                    if (address instanceof java.net.Inet4Address && !address.isLoopbackAddress()) {
+                        String host = address.getHostAddress();
+                        if (!hosts.contains(host)) {
+                            hosts.add(host);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Localhost remains the first try.
+        }
+        return hosts;
+    }
+
+    private static String discoverHost(Context context, String serviceType) {
+        AtomicReference<String> host = new AtomicReference<>();
+        CountDownLatch found = new CountDownLatch(1);
+        AdbMdns mdns = new AdbMdns(context, serviceType, new AdbMdns.OnAdbDaemonDiscoveredListener() {
+            @Override
+            public void onPortChanged(InetAddress hostAddress, int discovered) {
+                if (hostAddress != null && discovered > 0) {
+                    host.set(hostAddress.getHostAddress());
+                    found.countDown();
+                }
+            }
+        });
+        mdns.start();
+        try {
+            found.await(1500, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            mdns.stop();
+        }
+        return host.get();
     }
 
     private static int findPort(Context context, String serviceType, long timeoutMs) throws Exception {

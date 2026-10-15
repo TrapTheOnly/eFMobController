@@ -281,7 +281,7 @@ public final class MainActivity extends Activity {
     }
 
     private static String help() {
-        return "A normal app cannot open the controller devices, so Padlayer starts the translator through Wireless debugging.\n\n"
+        return "A normal app cannot open the controller devices. This app starts the translator on the phone through Wireless debugging. A computer is not required.\n\n"
                 + "1. Settings, Developer options, Wireless debugging, turn it on.\n"
                 + "2. Tap Pair device with pairing code and leave that screen open.\n"
                 + "3. Type the 6-digit code here and tap Pair. Type the pairing port too if Pair asks for it.\n"
